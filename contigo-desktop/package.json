@@ -2,10 +2,12 @@
   "name": "contigo-desktop",
   "version": "1.0.0",
   "description": "Contigo - Tu compañero de escritorio",
+  "author": "Contigo",
   "main": "main.js",
   "scripts": {
     "dev": "cross-env NODE_ENV=development electron .",
-    "build:mac": "electron-builder --mac",
+    "build:mac": "electron-builder --mac dmg --mac arm64 --mac x64",
+    "build:mac:zip": "electron-builder --mac zip",
     "build:win": "electron-builder --win"
   },
   "build": {
@@ -23,7 +25,8 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
       ]
     },
     "win": {
