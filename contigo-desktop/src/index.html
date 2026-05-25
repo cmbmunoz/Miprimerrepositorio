@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>Contigo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar">
+      <div class="logo">
+        <span class="logo-icon">❤</span>
+        <span class="logo-text">Contigo</span>
+      </div>
+      <ul class="nav-links">
+        <li class="nav-item active" data-section="inicio">
+          <span class="nav-icon">⌂</span>
+          <span>Inicio</span>
+        </li>
+        <li class="nav-item" data-section="mensajes">
+          <span class="nav-icon">✉</span>
+          <span>Mensajes</span>
+        </li>
+        <li class="nav-item" data-section="notas">
+          <span class="nav-icon">✎</span>
+          <span>Notas</span>
+        </li>
+        <li class="nav-item" data-section="ajustes">
+          <span class="nav-icon">⚙</span>
+          <span>Ajustes</span>
+        </li>
+      </ul>
+    </nav>
+
+    <main class="content">
+      <section id="inicio" class="section active">
+        <div class="welcome">
+          <h1>Bienvenido a Contigo</h1>
+          <p class="subtitle">Tu compañero de escritorio, siempre contigo.</p>
+          <div class="cards">
+            <div class="card">
+              <span class="card-icon">✉</span>
+              <h3>Mensajes</h3>
+              <p>Mantente conectado con las personas que importan.</p>
+            </div>
+            <div class="card">
+              <span class="card-icon">✎</span>
+              <h3>Notas</h3>
+              <p>Captura tus ideas en cualquier momento.</p>
+            </div>
+            <div class="card">
+              <span class="card-icon">★</span>
+              <h3>Favoritos</h3>
+              <p>Accede rápido a lo más importante.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="mensajes" class="section">
+        <h2>Mensajes</h2>
+        <p class="placeholder-text">No hay mensajes aún.</p>
+      </section>
+
+      <section id="notas" class="section">
+        <h2>Notas</h2>
+        <p class="placeholder-text">No hay notas aún.</p>
+      </section>
+
+      <section id="ajustes" class="section">
+        <h2>Ajustes</h2>
+        <div class="settings-group">
+          <label>Versión de Electron</label>
+          <span id="electron-version" class="setting-value">—</span>
+        </div>
+        <div class="settings-group">
+          <label>Plataforma</label>
+          <span id="platform" class="setting-value">—</span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
