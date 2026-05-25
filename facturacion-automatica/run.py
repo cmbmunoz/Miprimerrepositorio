@@ -1,11 +1,15 @@
 """
-Main orchestrator — polls Microsoft 365 inbox for purchase orders,
-extracts data from attached PDFs, generates pre-invoices, and sends
-email notifications. Tracks state to avoid duplicate processing.
+Main orchestrator — two independent loops:
+
+  1. OC email monitor: polls M365 inbox every POLL_INTERVAL_SECONDS,
+     detects purchase-order PDFs, generates pre-invoices (Excel).
+
+  2. Monthly HR billing: at 08:00 on the 2nd of each month generates
+     one PDF pre-invoice per project from HR data and emails each client.
 
 Usage:
-    python run.py            # continuous mode (polls every POLL_INTERVAL_SECONDS)
-    python run.py --once     # process pending emails once and exit
+    python run.py            # continuous mode
+    python run.py --once     # one pass only (email check + day-2 check) then exit
 """
 
 import argparse
@@ -13,11 +17,13 @@ import logging
 import os
 import sys
 import time
+from datetime import date
 
 import schedule
 
 from config import OUTPUT_DIR, POLL_INTERVAL_SECONDS, USER_EMAIL
 from auth import get_token
+from hr.db import init_db
 from email_watcher import (
     get_unread_oc_emails,
     get_pdf_attachments,
@@ -124,22 +130,46 @@ def process_inbox() -> None:
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
+# ── Monthly HR pre-invoice (day 2) ───────────────────────────────────────────
+def check_monthly_rrhh() -> None:
+    hoy = date.today()
+    if hoy.day != 2:
+        return
+    # Bill the previous month
+    mes  = hoy.month - 1 if hoy.month > 1 else 12
+    anio = hoy.year      if hoy.month > 1 else hoy.year - 1
+    log.info("Día 2 detectado — iniciando pre-facturación RRHH para %02d/%d", mes, anio)
+    try:
+        from prefactura_mensual import generar_para_mes
+        generar_para_mes(mes, anio)
+    except Exception as e:
+        log.error("Error en pre-facturación RRHH: %s", e, exc_info=True)
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Sistema de pre-facturación automática")
+    parser = argparse.ArgumentParser(description="Sistema de facturación automática")
     parser.add_argument("--once", action="store_true", help="Ejecutar una vez y salir")
     args = parser.parse_args()
 
+    init_db()  # ensure HR tables exist
+
     log.info("=" * 60)
-    log.info("  Sistema de Pre-Facturación Automática")
-    log.info("  Intervalo: %ds  |  Salida: %s", POLL_INTERVAL_SECONDS, OUTPUT_DIR)
+    log.info("  Sistema de Facturación Automática")
+    log.info("  OC email check: cada %ds", POLL_INTERVAL_SECONDS)
+    log.info("  RRHH mensual  : día 2 de cada mes a las 08:00")
+    log.info("  Salida        : %s", OUTPUT_DIR)
     log.info("=" * 60)
 
     if args.once:
         process_inbox()
+        check_monthly_rrhh()
         return
 
     process_inbox()
+    check_monthly_rrhh()
+
     schedule.every(POLL_INTERVAL_SECONDS).seconds.do(process_inbox)
+    schedule.every().day.at("08:00").do(check_monthly_rrhh)
 
     try:
         while True:
