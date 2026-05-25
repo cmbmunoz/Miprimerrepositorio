@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+output/pdfs/
+output/prefacturas/
+output/facturas/
+output/*.log
+*.log
