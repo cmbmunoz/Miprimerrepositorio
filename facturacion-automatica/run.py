@@ -1,9 +1,10 @@
 """
 Main orchestrator — polls Microsoft 365 inbox for purchase orders,
-extracts data from attached PDFs, and generates pre-invoices.
+extracts data from attached PDFs, generates pre-invoices, and sends
+email notifications. Tracks state to avoid duplicate processing.
 
 Usage:
-    python run.py            # runs forever, polling every POLL_INTERVAL_SECONDS
+    python run.py            # continuous mode (polls every POLL_INTERVAL_SECONDS)
     python run.py --once     # process pending emails once and exit
 """
 
@@ -15,7 +16,7 @@ import time
 
 import schedule
 
-from config import OUTPUT_DIR, POLL_INTERVAL_SECONDS
+from config import OUTPUT_DIR, POLL_INTERVAL_SECONDS, USER_EMAIL
 from auth import get_token
 from email_watcher import (
     get_unread_oc_emails,
@@ -25,6 +26,8 @@ from email_watcher import (
 )
 from pdf_extractor import extract_oc_data
 from prefactura import generate_prefactura
+from estado import already_processed, register_prefactura
+from notificador import enviar_prefactura
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -38,6 +41,9 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger(__name__)
+
+# Optional: set a different notification recipient in .env
+NOTIFY_EMAIL = os.getenv("NOTIFY_EMAIL") or USER_EMAIL
 
 
 # ── Core logic ────────────────────────────────────────────────────────────────
@@ -65,32 +71,50 @@ def process_inbox() -> None:
         subject = email.get("subject", "(sin asunto)")
         sender  = email.get("from", {}).get("emailAddress", {}).get("address", "?")
         msg_id  = email["id"]
-        log.info("━━━ Procesando: '%s'  de  %s", subject, sender)
+        log.info("━━━ '%s'  de  %s", subject, sender)
 
         try:
             pdfs = get_pdf_attachments(token, msg_id)
             if not pdfs:
-                log.warning("  No se encontraron PDFs adjuntos, se omite.")
+                log.warning("  Sin PDFs adjuntos, se omite.")
+                mark_as_read(token, msg_id)
                 continue
 
             for pdf in pdfs:
-                log.info("  PDF: %s (%d bytes)", pdf["name"], len(pdf["content"]))
+                log.info("  PDF: %s (%d KB)", pdf["name"], len(pdf["content"]) // 1024)
 
                 pdf_path = save_pdf(pdf["content"], pdf["name"])
-                log.info("  Guardado en: %s", pdf_path)
 
                 oc = extract_oc_data(pdf_path)
+                numero_oc = oc.get("numero_oc") or pdf["name"]
+
+                # ── Deduplication ──────────────────────────────────────────
+                if already_processed(numero_oc):
+                    log.info("  OC %s ya procesada — saltando.", numero_oc)
+                    continue
+
                 log.info(
                     "  OC extraída → #%s | %s | %s %s",
-                    oc.get("numero_oc") or "?",
+                    numero_oc,
                     oc.get("cliente", {}).get("nombre") or "?",
                     oc.get("moneda", "ARS"),
-                    oc.get("total", 0),
+                    f"{oc.get('total', 0):,.2f}",
                 )
 
                 out_dir = os.path.join(OUTPUT_DIR, "prefacturas")
-                path = generate_prefactura(oc, out_dir)
-                log.info("  ✔ Prefactura: %s", path)
+                prefactura_path, json_path = generate_prefactura(oc, out_dir)
+
+                register_prefactura(
+                    numero_oc=numero_oc,
+                    email_id=msg_id,
+                    pdf_path=pdf_path,
+                    prefactura_path=prefactura_path,
+                    json_path=json_path,
+                )
+
+                # ── Notify ─────────────────────────────────────────────────
+                if NOTIFY_EMAIL:
+                    enviar_prefactura(token, NOTIFY_EMAIL, numero_oc, prefactura_path)
 
             mark_as_read(token, msg_id)
             log.info("  Email marcado como leído.")
@@ -114,7 +138,7 @@ def main() -> None:
         process_inbox()
         return
 
-    process_inbox()  # run immediately on start
+    process_inbox()
     schedule.every(POLL_INTERVAL_SECONDS).seconds.do(process_inbox)
 
     try:
