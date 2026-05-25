@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 output/pdfs/
 output/prefacturas/
+output/prefacturas_rrhh/
 output/facturas/
 output/*.log
+output/*.db
 *.log
